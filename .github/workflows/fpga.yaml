@@ -9,6 +9,10 @@ on:
 jobs:
   fpga:
     runs-on: ubuntu-24.04
+    env:
+      # setup-oss-cad-suite (nested inside the TT composite action) queries the GitHub
+      # releases API; without a token it hits the shared runner IP's 60 req/h limit.
+      INPUT_GITHUB-TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: checkout repo
         uses: actions/checkout@v6

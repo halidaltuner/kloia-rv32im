@@ -1,42 +1,121 @@
-![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
+<p align="center">
+  <img src="docs/kloia-logo.svg" alt="kloia" width="200">
+</p>
 
-# Tiny Tapeout Verilog Project Template
+<h1 align="center">Kloia RV32IM</h1>
 
-- [Read the documentation for project](docs/info.md)
+<p align="center">
+  A 32-bit RISC-V (RV32IM) core on the Tiny Tapeout sky130 shuttle.
+</p>
 
-## What is Tiny Tapeout?
+<p align="center">
+  <img src="../../workflows/gds/badge.svg" alt="gds">
+  <img src="../../workflows/docs/badge.svg" alt="docs">
+  <img src="../../workflows/test/badge.svg" alt="test">
+  <img src="../../workflows/fpga/badge.svg" alt="fpga">
+</p>
 
-Tiny Tapeout is an educational project that aims to make it easier and cheaper than ever to get your digital and analog designs manufactured on a real chip.
+---
 
-To learn more and get started, visit https://tinytapeout.com.
+## Overview
 
-## Set up your Verilog project
+Kloia RV32IM puts a complete RISC-V CPU into a Tiny Tapeout tile. The core is the open-source
+[ultraembedded RISC-V core](https://github.com/ultraembedded/riscv) — RV32IM + Zicsr, machine
+mode, in-order pipeline with hardware multiply and divide — configured without the MMU and
+supervisor mode so it fits the 8×2 tile budget. Program and data memory live on the host side:
+the tile exposes a byte-serial memory bus over the Tiny Tapeout pins, and a testbench, FPGA or
+microcontroller services every fetch, load and store.
 
-1. Add your Verilog files to the `src` folder.
-2. Edit the [info.yaml](info.yaml) and update information about your project, paying special attention to the `source_files` and `top_module` properties. If you are upgrading an existing Tiny Tapeout project, check out our [online info.yaml migration tool](https://tinytapeout.github.io/tt-yaml-upgrade-tool/).
-3. Edit [docs/info.md](docs/info.md) and add a description of your project.
-4. Adapt the testbench to your design. See [test/README.md](test/README.md) for more information.
+The project is Kloia's first silicon. We build and modernise software platforms for a living;
+this chip walks the same path our customers walk — from RTL to GDS with an open PDK, an open
+flow and a CI pipeline that hardens every push.
 
-The GitHub action will automatically build the ASIC files using [LibreLane](https://www.zerotoasiccourse.com/terminology/librelane/).
+## Features
 
-## Enable GitHub actions to build the results page
+| Area | Detail |
+|---|---|
+| ISA | RV32I base + M extension (`MUL`, `MULH*`, `DIV*`, `REM*`) + Zicsr |
+| Privilege | Machine mode (supervisor/user and MMU disabled) |
+| Pipeline | In-order, with load and multiply result bypass |
+| Memory interface | Byte-serial bus over the TT pins; instruction and data ports arbitrated, one outstanding request |
+| Reset / boot | Active-low reset; fetches from `0x0000_0000` |
+| Interrupt | External interrupt on `uio[3]` |
+| Process | SkyWater sky130A, hardened with LibreLane |
+| Tile size | 8 × 2, 25 MHz timing target |
 
-- [Enabling GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part)
+## Pinout
 
-## Resources
+| Pin | Direction | Function |
+|---|---|---|
+| `ui[7:0]` | in | `BUS_IN` — read data byte from the host |
+| `uo[7:0]` | out | `BUS_OUT` — header, address and write-data bytes |
+| `uio[0]` | out | `BUS_VALID` — `uo` carries a byte this cycle |
+| `uio[1]` | out | `BUS_BUSY` — a transaction is in flight |
+| `uio[2]` | in | `BUS_IN_VALID` — host presents a byte on `ui`, or acks a write |
+| `uio[3]` | in | `IRQ` — external interrupt |
+| `uio[7:4]` | — | unused |
+| `clk` | in | Core clock |
+| `rst_n` | in | Active-low reset |
 
-- [FAQ](https://tinytapeout.com/faq/)
-- [Digital design lessons](https://tinytapeout.com/digital_design/)
-- [Learn how semiconductors work](https://tinytapeout.com/siliwiz/)
-- [Join the community](https://tinytapeout.com/discord)
-- [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
+## Bus protocol
 
-## What next?
+Every memory request is streamed out on `uo`, one byte per clock while `BUS_VALID` is high:
 
-- [Submit your design to the next shuttle](https://app.tinytapeout.com/).
-- Edit [this README](README.md) and explain your design, how it works, and how to test it.
-- Share your project on your social network of choice:
-  - LinkedIn [#tinytapeout](https://www.linkedin.com/search/results/content/?keywords=%23tinytapeout) [@TinyTapeout](https://www.linkedin.com/company/100708654/)
-  - Mastodon [#tinytapeout](https://chaos.social/tags/tinytapeout) [@matthewvenn](https://chaos.social/@matthewvenn)
-  - X (formerly Twitter) [#tinytapeout](https://twitter.com/hashtag/tinytapeout) [@tinytapeout](https://twitter.com/tinytapeout)
-  - Bluesky [@tinytapeout.com](https://bsky.app/profile/tinytapeout.com)
+| Byte | Content |
+|---|---|
+| 0 | header: `[7]` write, `[6]` instruction fetch, `[3:0]` byte enables |
+| 1–4 | address, LSB first |
+| 5–8 | write data, LSB first (writes only) |
+
+The host replies on `ui` with `BUS_IN_VALID` high: four data bytes (LSB first) for a read, or a
+single pulse to acknowledge a write. `BUS_BUSY` drops once the core has received the response.
+The wrapper lives in [`src/tt_um_kloia_rv32im.v`](src/tt_um_kloia_rv32im.v); the core sources
+are the unmodified `riscv_*.v` files.
+
+## How to test
+
+```bash
+pip install -r test/requirements.txt
+cd test && make
+```
+
+The cocotb testbench models the host side of the bus and runs a short RV32IM program that
+exercises `add`, `sub`, `mul`, `divu`, `remu`, `lw` and `sw`, checking the values the program
+stores to `0x8000_0000` onward. Run `make GATES=yes` after a GDS build to repeat the test on the
+gate-level netlist. See [test/README.md](test/README.md) for the harness details.
+
+On the demo board, drive the bus from a controller with fast GPIO (the RP2040's PIO is a good
+fit), hold `rst_n` low while the program image is loaded, then release it.
+
+## Building the ASIC
+
+Every push runs the full flow in GitHub Actions:
+
+- **test** — cocotb regression with Icarus Verilog
+- **gds** — LibreLane hardening, precheck, gate-level test and an interactive GDS viewer on
+  GitHub Pages
+- **docs** — datasheet PDF from `info.yaml` and `docs/info.md`
+- **fpga** — ICE40UP5K bitstream for the TT ASIC Sim board (manual trigger)
+
+To harden locally, follow the
+[Tiny Tapeout local hardening guide](https://www.tinytapeout.com/guides/local-hardening/).
+
+## Repository layout
+
+```
+src/        tt_um_kloia_rv32im.v (wrapper + bus bridge), riscv_*.v (core), config.json
+test/       cocotb testbench, bus host model, mini assembler and test program
+docs/       datasheet source (info.md) and images
+info.yaml   Tiny Tapeout project metadata and pinout
+```
+
+## About Kloia
+
+[Kloia](https://www.kloia.com) is a technology partner for cloud, DevOps, application
+modernisation, QA and observability. We work hands-on inside our customers' teams, and we take
+the same approach to hardware: open tools, automated pipelines and shipping real things.
+
+## License
+
+The wrapper, testbench and documentation are Apache-2.0 ([LICENSE](LICENSE)). The RISC-V core
+(`src/riscv_*.v`) is © ultraembedded, BSD-3-Clause ([src/LICENSE.riscv-core](src/LICENSE.riscv-core)).

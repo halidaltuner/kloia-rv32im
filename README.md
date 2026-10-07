@@ -12,7 +12,6 @@
   <img src="../../workflows/gds/badge.svg" alt="gds">
   <img src="../../workflows/docs/badge.svg" alt="docs">
   <img src="../../workflows/test/badge.svg" alt="test">
-  <img src="../../workflows/fpga/badge.svg" alt="fpga">
 </p>
 
 ---
@@ -95,7 +94,8 @@ Every push runs the full flow in GitHub Actions:
 - **gds** — LibreLane hardening, precheck, gate-level test and an interactive GDS viewer on
   GitHub Pages
 - **docs** — datasheet PDF from `info.yaml` and `docs/info.md`
-- **fpga** — ICE40UP5K bitstream for the TT ASIC Sim board (manual trigger)
+- **fpga** — ICE40UP5K bitstream for the TT ASIC Sim board (manual trigger). The full core
+  needs more logic cells than the UP5K has, so this flow does not complete for this design.
 
 To harden locally, follow the
 [Tiny Tapeout local hardening guide](https://www.tinytapeout.com/guides/local-hardening/).

@@ -10,7 +10,7 @@ PROJECT_SOURCES = tt_um_kloia_rv32im.v \
 	riscv_core.v riscv_alu.v riscv_csr.v riscv_csr_regfile.v riscv_decode.v \
 	riscv_decoder.v riscv_divider.v riscv_exec.v riscv_fetch.v riscv_issue.v \
 	riscv_lsu.v riscv_mmu.v riscv_multiplier.v riscv_pipe_ctrl.v riscv_regfile.v \
-	riscv_xilinx_2r1w.v
+	riscv_xilinx_2r1w.v riscv_trace_sim.v
 
 ifneq ($(GATES),yes)
 

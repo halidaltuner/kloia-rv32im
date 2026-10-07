@@ -34,6 +34,7 @@ project:
     - "riscv_pipe_ctrl.v"
     - "riscv_regfile.v"
     - "riscv_xilinx_2r1w.v"
+    - "riscv_trace_sim.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).

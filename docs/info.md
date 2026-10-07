@@ -10,7 +10,8 @@ You can also include images in this folder and reference them in the markdown. E
 ## How it works
 
 Kloia RV32IM wraps the open-source [ultraembedded RISC-V core](https://github.com/ultraembedded/riscv)
-(RV32IM + Zicsr, machine mode, in-order pipeline, hardware multiply/divide) in a Tiny Tapeout tile.
+(RV32IM + Zicsr, machine mode, in-order pipeline) in a Tiny Tapeout tile. To fit the 8×2 tile,
+multiply and divide share one iterative 32-cycle unit instead of the upstream array multiplier.
 The core's instruction and data ports are arbitrated onto one byte-serial memory bus that runs over
 the Tiny Tapeout pins, so program and data memory live on the host side (testbench, FPGA or
 microcontroller) and the tile only holds the CPU.

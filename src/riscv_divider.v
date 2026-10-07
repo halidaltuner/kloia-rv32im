@@ -88,16 +88,37 @@ wire div_rem_inst_w     = ((opcode_opcode_i & `INST_DIV_MASK) == `INST_DIV)  ||
 wire signed_operation_w = ((opcode_opcode_i & `INST_DIV_MASK) == `INST_DIV) || ((opcode_opcode_i & `INST_REM_MASK) == `INST_REM);
 wire div_operation_w    = ((opcode_opcode_i & `INST_DIV_MASK) == `INST_DIV) || ((opcode_opcode_i & `INST_DIVU_MASK) == `INST_DIVU);
 
-reg [31:0] dividend_q;
-reg [62:0] divisor_q;
+// Kloia change: multiply runs through this iterative unit as well (32 cycles,
+// shift-and-add) instead of the pipelined array multiplier, which alone was
+// ~30% of the design area. The decoder issues MUL* on the div path.
+wire inst_mul_w         = (opcode_opcode_i & `INST_MUL_MASK) == `INST_MUL;
+wire inst_mulh_w        = (opcode_opcode_i & `INST_MULH_MASK) == `INST_MULH;
+wire inst_mulhsu_w      = (opcode_opcode_i & `INST_MULHSU_MASK) == `INST_MULHSU;
+wire inst_mulhu_w       = (opcode_opcode_i & `INST_MULHU_MASK) == `INST_MULHU;
+wire mul_inst_w         = inst_mul_w | inst_mulh_w | inst_mulhsu_w | inst_mulhu_w;
+
+// Multiply on magnitudes; fix the sign of the 64-bit product afterwards.
+wire mul_a_neg_w        = (inst_mulh_w | inst_mulhsu_w) & opcode_ra_operand_i[31];
+wire mul_b_neg_w        = inst_mulh_w & opcode_rb_operand_i[31];
+
+reg [31:0] dividend_q;      // divide: remainder    multiply: multiplier bits (shifted out)
+reg [62:0] divisor_q;       // divide: divisor      multiply: [31:0] multiplicand
 reg [31:0] quotient_q;
-reg [31:0] q_mask_q;
+reg [31:0] q_mask_q;        // one-hot step counter for both operations
 reg        div_inst_q;
 reg        div_busy_q;
 reg        invert_res_q;
+reg        mul_inst_q;
+reg        mul_hi_q;
+reg [63:0] mul_acc_q;
 
-wire div_start_w    = opcode_valid_i & div_rem_inst_w;
+wire div_start_w    = opcode_valid_i & (div_rem_inst_w | mul_inst_w);
 wire div_complete_w = !(|q_mask_q) & div_busy_q;
+
+// One shift-and-add step: add the multiplicand into the upper half when the
+// current multiplier bit is set, then shift the 65-bit result right by one.
+wire [32:0] mul_sum_w  = {1'b0, mul_acc_q[63:32]} + (dividend_q[0] ? {1'b0, divisor_q[31:0]} : 33'b0);
+wire [63:0] mul_next_w = {mul_sum_w, mul_acc_q[31:1]};
 
 always @(posedge clk_i or posedge rst_i)
 if (rst_i)
@@ -109,12 +130,31 @@ begin
     quotient_q     <= 32'b0;
     q_mask_q       <= 32'b0;
     div_inst_q     <= 1'b0;
+    mul_inst_q     <= 1'b0;
+    mul_hi_q       <= 1'b0;
+    mul_acc_q      <= 64'b0;
+end
+else if (div_start_w && mul_inst_w)
+begin
+    div_busy_q     <= 1'b1;
+    div_inst_q     <= 1'b0;
+    mul_inst_q     <= 1'b1;
+    mul_hi_q       <= ~inst_mul_w;
+
+    dividend_q     <= mul_b_neg_w ? -opcode_rb_operand_i : opcode_rb_operand_i;
+    divisor_q      <= {31'b0, mul_a_neg_w ? -opcode_ra_operand_i : opcode_ra_operand_i};
+    invert_res_q   <= mul_a_neg_w ^ mul_b_neg_w;
+
+    mul_acc_q      <= 64'b0;
+    quotient_q     <= 32'b0;
+    q_mask_q       <= 32'h80000000;
 end
 else if (div_start_w)
 begin
 
     div_busy_q     <= 1'b1;
     div_inst_q     <= div_operation_w;
+    mul_inst_q     <= 1'b0;
 
     if (signed_operation_w && opcode_ra_operand_i[31])
         dividend_q <= -opcode_ra_operand_i;
@@ -136,6 +176,12 @@ else if (div_complete_w)
 begin
     div_busy_q <= 1'b0;
 end
+else if (div_busy_q && mul_inst_q)
+begin
+    mul_acc_q  <= mul_next_w;
+    dividend_q <= {1'b0, dividend_q[31:1]};
+    q_mask_q   <= {1'b0, q_mask_q[31:1]};
+end
 else if (div_busy_q)
 begin
     if (divisor_q <= {31'b0, dividend_q})
@@ -148,12 +194,16 @@ begin
     q_mask_q  <= {1'b0, q_mask_q[31:1]};
 end
 
+wire [63:0] mul_product_w = invert_res_q ? -mul_acc_q : mul_acc_q;
+
 reg [31:0] div_result_r;
 always @ *
 begin
     div_result_r = 32'b0;
 
-    if (div_inst_q)
+    if (mul_inst_q)
+        div_result_r = mul_hi_q ? mul_product_w[63:32] : mul_product_w[31:0];
+    else if (div_inst_q)
         div_result_r = invert_res_q ? -quotient_q : quotient_q;
     else
         div_result_r = invert_res_q ? -dividend_q : dividend_q;

@@ -35,7 +35,8 @@ flow and a CI pipeline that hardens every push.
 |---|---|
 | ISA | RV32I base + M extension (`MUL`, `MULH*`, `DIV*`, `REM*`) + Zicsr |
 | Privilege | Machine mode (supervisor/user and MMU disabled) |
-| Pipeline | In-order, with load and multiply result bypass |
+| Pipeline | In-order, with load result bypass |
+| Multiply / divide | Shared iterative unit, 32 cycles per operation (see *Core changes*) |
 | Memory interface | Byte-serial bus over the TT pins; instruction and data ports arbitrated, one outstanding request |
 | Reset / boot | Active-low reset; fetches from `0x0000_0000` |
 | Interrupt | External interrupt on `uio[3]` |
@@ -69,7 +70,22 @@ Every memory request is streamed out on `uo`, one byte per clock while `BUS_VALI
 The host replies on `ui` with `BUS_IN_VALID` high: four data bytes (LSB first) for a read, or a
 single pulse to acknowledge a write. `BUS_BUSY` drops once the core has received the response.
 The wrapper lives in [`src/tt_um_kloia_rv32im.v`](src/tt_um_kloia_rv32im.v); the core sources
-are the unmodified `riscv_*.v` files.
+are the upstream `riscv_*.v` files with the changes listed below.
+
+## Core changes
+
+The upstream core did not fit the 8×2 tile: its pipelined 32×32 array multiplier alone was about
+30 % of the cell area, and placement failed at 83 % utilisation. Two files are changed, each
+marked with a `Kloia change` comment:
+
+- `riscv_divider.v` — also executes `MUL`, `MULH`, `MULHSU` and `MULHU` as a 32-cycle
+  shift-and-add, reusing the divider's step counter and operand registers.
+- `riscv_decoder.v` — issues the multiply instructions on the divide path, so the array
+  multiplier (`riscv_multiplier.v`, still in the tree) is never selected and is removed by
+  synthesis.
+
+Multiplies therefore take ~34 cycles instead of 2; everything else, including the result
+bypass for loads, is unchanged. Flattened generic synthesis drops from ~45 k to ~32 k cells.
 
 ## How to test
 

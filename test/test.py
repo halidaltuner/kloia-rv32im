@@ -52,6 +52,9 @@ def lui(rd, imm):        return u_type(imm, rd, 0x37)
 def add(rd, rs1, rs2):   return r_type(0b0000000, rs2, rs1, 0b000, rd, 0x33)
 def sub(rd, rs1, rs2):   return r_type(0b0100000, rs2, rs1, 0b000, rd, 0x33)
 def mul(rd, rs1, rs2):   return r_type(0b0000001, rs2, rs1, 0b000, rd, 0x33)
+def mulh(rd, rs1, rs2):  return r_type(0b0000001, rs2, rs1, 0b001, rd, 0x33)
+def mulhsu(rd, rs1, rs2):return r_type(0b0000001, rs2, rs1, 0b010, rd, 0x33)
+def mulhu(rd, rs1, rs2): return r_type(0b0000001, rs2, rs1, 0b011, rd, 0x33)
 def divu(rd, rs1, rs2):  return r_type(0b0000001, rs2, rs1, 0b101, rd, 0x33)
 def remu(rd, rs1, rs2):  return r_type(0b0000001, rs2, rs1, 0b111, rd, 0x33)
 def lw(rd, rs1, imm):    return i_type(imm, rs1, 0b010, rd, 0x03)
@@ -79,6 +82,14 @@ PROGRAM = [
     sw(10, 8, 16),           # IO[16] = 0xFFFFFFF6
     lw(9, 0, DATA_ADDR),     # x9 = mem[0x100]
     sw(9, 8, 20),            # IO[20] = 0xDEADBEEF
+    mulh(11, 10, 2),         # x11 = (-10 * 30) >> 32        = -1
+    mulhsu(12, 10, 2),       # x12 = (-10 * 30u) >> 32       = -1
+    mulhu(13, 10, 2),        # x13 = (0xFFFFFFF6 * 30) >> 32 = 29
+    mul(14, 10, 2),          # x14 = -300
+    sw(11, 8, 24),           # IO[24] = 0xFFFFFFFF
+    sw(12, 8, 28),           # IO[28] = 0xFFFFFFFF
+    sw(13, 8, 32),           # IO[32] = 29
+    sw(14, 8, 36),           # IO[36] = 0xFFFFFED4
     jal(0, 0),               # spin forever
 ]
 
@@ -89,6 +100,10 @@ EXPECTED_IO = {
     IO_BASE + 12: 5,
     IO_BASE + 16: 0xFFFF_FFF6,
     IO_BASE + 20: DATA_VALUE,
+    IO_BASE + 24: 0xFFFF_FFFF,
+    IO_BASE + 28: 0xFFFF_FFFF,
+    IO_BASE + 32: 29,
+    IO_BASE + 36: 0xFFFF_FED4,
 }
 
 

@@ -1,0 +1,80 @@
+name: bundle
+
+# Collects the artifacts of the test, docs and gds workflows for one commit
+# into a single artifact. Each of those workflows triggers this one when it
+# finishes; only the last one to complete for a given commit builds the bundle.
+on:
+  workflow_run:
+    workflows: [test, docs, gds]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Find the runs for this commit
+        id: runs
+        run: |
+          ready=true
+          for wf in test docs gds; do
+            id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow "$wf.yaml" --commit "$SHA" \
+                   --status completed --limit 1 --json databaseId -q '.[0].databaseId')
+            if [ -z "$id" ]; then
+              echo "$wf has not completed for $SHA yet"
+              ready=false
+            else
+              echo "${wf}_run=$id" >> "$GITHUB_OUTPUT"
+            fi
+          done
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifacts
+        if: steps.runs.outputs.ready == 'true'
+        run: |
+          mkdir -p bundle
+          for wf in test docs gds; do
+            id=$(printf '%s' '${{ toJSON(steps.runs.outputs) }}' | jq -r ".${wf}_run")
+            gh run download "$id" -R "$GITHUB_REPOSITORY" -D "bundle/$wf" || echo "$wf: no artifacts"
+          done
+          rm -rf bundle/gds/github-pages
+
+      - name: Write manifest
+        if: steps.runs.outputs.ready == 'true'
+        run: |
+          {
+            echo "# Kloia RV32IM build bundle"
+            echo
+            echo "- commit: \`$SHA\`"
+            echo "- generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "| workflow | conclusion | run |"
+            echo "|---|---|---|"
+            for wf in test docs gds; do
+              id=$(printf '%s' '${{ toJSON(steps.runs.outputs) }}' | jq -r ".${wf}_run")
+              c=$(gh run view "$id" -R "$GITHUB_REPOSITORY" --json conclusion -q .conclusion)
+              echo "| $wf | $c | https://github.com/$GITHUB_REPOSITORY/actions/runs/$id |"
+            done
+            echo
+            echo "## Contents"
+            echo
+            echo '```'
+            (cd bundle && find . -type f | sort)
+            echo '```'
+          } > bundle/MANIFEST.md
+          cat bundle/MANIFEST.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bundle
+        if: steps.runs.outputs.ready == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: kloia-rv32im-${{ github.event.workflow_run.head_sha || github.sha }}
+          path: bundle
+          if-no-files-found: error

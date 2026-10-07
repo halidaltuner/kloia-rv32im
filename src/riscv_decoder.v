@@ -206,14 +206,16 @@ assign branch_o =   ((opcode_i & `INST_JAL_MASK) == `INST_JAL)   ||
                     ((opcode_i & `INST_BLTU_MASK) == `INST_BLTU) ||
                     ((opcode_i & `INST_BGEU_MASK) == `INST_BGEU);
 
-assign mul_o =      enable_muldiv_i &&
+// Kloia change: MUL* is executed by the iterative unit in riscv_divider.v, so
+// it is issued on the div path and the pipelined multiplier is never selected.
+assign mul_o =      1'b0;
+
+assign div_o =      enable_muldiv_i &&
                     (((opcode_i & `INST_MUL_MASK) == `INST_MUL)    ||
                     ((opcode_i & `INST_MULH_MASK) == `INST_MULH)   ||
                     ((opcode_i & `INST_MULHSU_MASK) == `INST_MULHSU) ||
-                    ((opcode_i & `INST_MULHU_MASK) == `INST_MULHU));
-
-assign div_o =      enable_muldiv_i &&
-                    (((opcode_i & `INST_DIV_MASK) == `INST_DIV) ||
+                    ((opcode_i & `INST_MULHU_MASK) == `INST_MULHU) ||
+                    ((opcode_i & `INST_DIV_MASK) == `INST_DIV) ||
                     ((opcode_i & `INST_DIVU_MASK) == `INST_DIVU) ||
                     ((opcode_i & `INST_REM_MASK) == `INST_REM) ||
                     ((opcode_i & `INST_REMU_MASK) == `INST_REMU));

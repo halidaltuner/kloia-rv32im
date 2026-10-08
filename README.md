@@ -84,8 +84,9 @@ marked with a `Kloia change` comment:
   multiplier (`riscv_multiplier.v`, still in the tree) is never selected and is removed by
   synthesis.
 
-Multiplies therefore take ~34 cycles instead of 2; everything else, including the result
-bypass for loads, is unchanged. Flattened generic synthesis drops from ~45 k to ~32 k cells.
+Multiplies therefore take ~34 cycles instead of 2. The load/multiply result bypass paths are
+also disabled (`SUPPORT_*_BYPASS = 0` in the wrapper) to take two 32-bit buses out of the
+issue stage; everything else is unchanged. Flattened generic synthesis drops from ~45 k to ~32 k cells.
 
 ## How to test
 

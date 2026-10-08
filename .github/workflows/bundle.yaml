@@ -8,6 +8,11 @@ on:
     workflows: [test, docs, gds]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit to bundle (defaults to the current commit)
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -18,19 +23,33 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
-      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      SHA: ${{ github.event.workflow_run.head_sha || inputs.sha || github.sha }}
+      # The run that triggered us is complete by definition; the API may still
+      # report it as in_progress for a few seconds, so take its id from the event.
+      TRIGGER_NAME: ${{ github.event.workflow_run.name }}
+      TRIGGER_ID: ${{ github.event.workflow_run.id }}
     steps:
       - name: Find the runs for this commit
         id: runs
         run: |
           ready=true
           for wf in test docs gds; do
-            id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow "$wf.yaml" --commit "$SHA" \
-                   --status completed --limit 1 --json databaseId -q '.[0].databaseId')
+            if [ "$wf" = "$TRIGGER_NAME" ]; then
+              id="$TRIGGER_ID"
+            else
+              id=""
+              for attempt in 1 2 3 4 5 6; do
+                id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow "$wf.yaml" --commit "$SHA" \
+                       --status completed --limit 1 --json databaseId -q '.[0].databaseId')
+                [ -n "$id" ] && break
+                sleep 20
+              done
+            fi
             if [ -z "$id" ]; then
               echo "$wf has not completed for $SHA yet"
               ready=false
             else
+              echo "$wf run: $id"
               echo "${wf}_run=$id" >> "$GITHUB_OUTPUT"
             fi
           done
@@ -38,16 +57,20 @@ jobs:
 
       - name: Download artifacts
         if: steps.runs.outputs.ready == 'true'
+        env:
+          RUNS: ${{ toJSON(steps.runs.outputs) }}
         run: |
           mkdir -p bundle
           for wf in test docs gds; do
-            id=$(printf '%s' '${{ toJSON(steps.runs.outputs) }}' | jq -r ".${wf}_run")
+            id=$(jq -r ".${wf}_run" <<< "$RUNS")
             gh run download "$id" -R "$GITHUB_REPOSITORY" -D "bundle/$wf" || echo "$wf: no artifacts"
           done
-          rm -rf bundle/gds/github-pages
+          rm -rf bundle/gds/github-pages bundle/gds/GDS_logs
 
       - name: Write manifest
         if: steps.runs.outputs.ready == 'true'
+        env:
+          RUNS: ${{ toJSON(steps.runs.outputs) }}
         run: |
           {
             echo "# Kloia RV32IM build bundle"
@@ -58,7 +81,7 @@ jobs:
             echo "| workflow | conclusion | run |"
             echo "|---|---|---|"
             for wf in test docs gds; do
-              id=$(printf '%s' '${{ toJSON(steps.runs.outputs) }}' | jq -r ".${wf}_run")
+              id=$(jq -r ".${wf}_run" <<< "$RUNS")
               c=$(gh run view "$id" -R "$GITHUB_REPOSITORY" --json conclusion -q .conclusion)
               echo "| $wf | $c | https://github.com/$GITHUB_REPOSITORY/actions/runs/$id |"
             done
@@ -75,6 +98,6 @@ jobs:
         if: steps.runs.outputs.ready == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: kloia-rv32im-${{ github.event.workflow_run.head_sha || github.sha }}
+          name: kloia-rv32im-${{ github.event.workflow_run.head_sha || inputs.sha || github.sha }}
           path: bundle
           if-no-files-found: error

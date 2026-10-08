@@ -2,6 +2,11 @@ name: gds
 
 on:
   push:
+    paths-ignore:
+      - "README.md"
+      - "LICENSE"
+      - "screenshots/**"
+      - ".github/workflows/bundle.yaml"
   workflow_dispatch:
 
 jobs:

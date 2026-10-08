@@ -43,7 +43,9 @@ module riscv_csr_regfile
 // Params
 //-----------------------------------------------------------------
 #(
-     parameter SUPPORT_MTIMECMP    = 1,
+     // Kloia change: no mtimecmp timer interrupt; removes 33 flops and a 32-bit
+     // comparator so the 8x2 tile routes. The external IRQ pin is unaffected.
+     parameter SUPPORT_MTIMECMP    = 0,
      parameter SUPPORT_SUPER       = 0
 )
 //-----------------------------------------------------------------

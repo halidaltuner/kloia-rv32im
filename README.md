@@ -39,7 +39,7 @@ flow and a CI pipeline that hardens every push.
 | Multiply / divide | Shared iterative unit, 32 cycles per operation (see *Core changes*) |
 | Memory interface | Byte-serial bus over the TT pins; instruction and data ports arbitrated, one outstanding request |
 | Reset / boot | Active-low reset; fetches from `0x0000_0000` |
-| Interrupt | External interrupt on `uio[3]` |
+| Interrupt | External interrupt on `uio[3]` (no internal timer interrupt) |
 | Process | SkyWater sky130A, hardened with LibreLane |
 | Tile size | 8 × 2, 20 MHz timing target |
 
@@ -83,6 +83,8 @@ marked with a `Kloia change` comment:
 - `riscv_decoder.v` — issues the multiply instructions on the divide path, so the array
   multiplier (`riscv_multiplier.v`, still in the tree) is never selected and is removed by
   synthesis.
+- `riscv_csr_regfile.v` — `SUPPORT_MTIMECMP = 0`: no `mtimecmp` timer interrupt (the external
+  `IRQ` pin still works).
 
 Multiplies therefore take ~34 cycles instead of 2. The load/multiply result bypass paths are
 also disabled (`SUPPORT_*_BYPASS = 0` in the wrapper) to take two 32-bit buses out of the

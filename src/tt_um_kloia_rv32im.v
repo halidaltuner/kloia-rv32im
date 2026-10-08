@@ -64,8 +64,8 @@ module tt_um_kloia_rv32im (
       .SUPPORT_MULDIV     (1),
       .SUPPORT_SUPER      (0),
       .SUPPORT_MMU        (0),
-      .SUPPORT_LOAD_BYPASS(1),
-      .SUPPORT_MUL_BYPASS (1),
+      .SUPPORT_LOAD_BYPASS(0),
+      .SUPPORT_MUL_BYPASS (0),
       .EXTRA_DECODE_STAGE (0)
   ) u_core (
       .clk_i             (clk),

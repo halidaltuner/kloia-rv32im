@@ -35,13 +35,13 @@ flow and a CI pipeline that hardens every push.
 |---|---|
 | ISA | RV32I base + M extension (`MUL`, `MULH*`, `DIV*`, `REM*`) + Zicsr |
 | Privilege | Machine mode (supervisor/user and MMU disabled) |
-| Pipeline | In-order, with load result bypass |
+| Pipeline | In-order (result bypass paths disabled to save routing) |
 | Multiply / divide | Shared iterative unit, 32 cycles per operation (see *Core changes*) |
 | Memory interface | Byte-serial bus over the TT pins; instruction and data ports arbitrated, one outstanding request |
 | Reset / boot | Active-low reset; fetches from `0x0000_0000` |
 | Interrupt | External interrupt on `uio[3]` |
 | Process | SkyWater sky130A, hardened with LibreLane |
-| Tile size | 8 × 2, 25 MHz timing target |
+| Tile size | 8 × 2, 20 MHz timing target |
 
 ## Pinout
 

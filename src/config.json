@@ -17,7 +17,11 @@
 
   "//": "CLOCK_PERIOD - Increase this in case you are getting setup time violations.",
   "//": "The value is in nanoseconds, so 20ns == 50MHz.",
-  "CLOCK_PERIOD": 40,
+  "CLOCK_PERIOD": 50,
+
+  "//": "repair_design buffered 599 nets (2950 buffers) at the sky130 default of 10; that buffer tree pushed",
+  "//": "routing demand over 100% on met1-3. 32 keeps the trees small; timing has slack at 20 MHz.",
+  "MAX_FANOUT_CONSTRAINT": 32,
 
   "//": "The core sources `include riscv_defs.v from the same directory.",
   "VERILOG_INCLUDE_DIRS": ["dir::."],
